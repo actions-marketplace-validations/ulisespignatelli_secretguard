@@ -27,6 +27,8 @@ const usage = `secretguard: encuentra secretos en tu código antes que otros.
 
 Uso:
   secretguard scan [ruta]        Escanea archivos (por defecto, la carpeta actual)
+  secretguard github REPO        Escanea un repo de GitHub sin clonarlo a mano (ver: secretguard github -h)
+  secretguard github --user U    Escanea todos los repos de un usuario (o --org)
   secretguard baseline [ruta]    Acepta los hallazgos actuales en un archivo de línea base
   secretguard hook install       Instala el hook pre-commit en el repo actual
   secretguard rules              Lista los tipos de secreto que detecta
@@ -59,7 +61,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	switch args[0] {
 	case "scan":
+		if looksRemote(args[1:]) { // "scan https://github.com/..." equivale a "github ..."
+			return githubCmd(stripFlag(args[1:], "--history"), stdout, stderr)
+		}
 		return scan(args[1:], stdout, stderr, false)
+	case "github":
+		return githubCmd(args[1:], stdout, stderr)
 	case "baseline":
 		return scan(args[1:], stdout, stderr, true)
 	case "hook":
@@ -135,30 +142,9 @@ func scan(args []string, stdout, stderr io.Writer, makeBaseline bool) int {
 		return 2
 	}
 	exclude := splitList(o.exclude)
-	det := detect.New(nil)
 	sum := report.Summary{Target: root, History: o.history, Staged: o.staged, Version: version}
-
-	var found []finding.Finding
-	switch {
-	case o.staged && !isGitRepo(root):
-		err = errors.New("--staged necesita un repositorio de git")
-	case o.staged:
-		found, sum.Files, err = source.ScanStaged(gitTop(root), det, exclude)
-	default:
-		found, sum.Files, err = source.ScanFiles(root, det, source.Options{Exclude: exclude, Workers: o.workers})
-		if err == nil && o.history && !isGitRepo(root) {
-			fmt.Fprintln(stderr, "aviso: no es un repositorio de git; se escanean solo los archivos actuales")
-			sum.History = false
-		} else if err == nil && o.history {
-			var hist []finding.Finding
-			gitRoot := root
-			if fi, statErr := os.Stat(root); statErr == nil && !fi.IsDir() {
-				gitRoot = filepath.Dir(root)
-			}
-			hist, err = source.ScanHistory(gitRoot, det, exclude)
-			found = source.MergeHistory(found, hist)
-		}
-	}
+	found, files, histUsed, err := collect(root, o, exclude, stderr)
+	sum.Files, sum.History = files, histUsed
 	if err != nil {
 		fmt.Fprintln(stderr, "error:", err)
 		return 2
@@ -182,6 +168,12 @@ func scan(args []string, stdout, stderr io.Writer, makeBaseline bool) int {
 		fmt.Fprintf(stdout, "Línea base guardada en %s con %d hallazgo(s). Revisalos: aceptar no es lo mismo que rotar.\n", blPath, len(found))
 		return 0
 	}
+	return finish(found, sum, o, failOn, blPath, stdout, stderr)
+}
+
+// finish aplica la linea base y el puntaje minimo, escribe el informe y decide el codigo de salida.
+func finish(found []finding.Finding, sum report.Summary, o scanOpts, failOn finding.Severity, blPath string,
+	stdout, stderr io.Writer) int {
 	bl, err := baseline.Load(blPath)
 	if err != nil {
 		fmt.Fprintln(stderr, "error leyendo la línea base:", err)
@@ -282,9 +274,46 @@ func gitTop(root string) string {
 	}
 }
 
+// collect escanea una carpeta (y su historial si se pide). Devuelve hallazgos, archivos revisados y si
+// se uso el historial.
+func collect(root string, o scanOpts, exclude []string, stderr io.Writer) ([]finding.Finding, int, bool, error) {
+	det := detect.New(nil)
+	switch {
+	case o.staged && !isGitRepo(root):
+		return nil, 0, false, errors.New("--staged necesita un repositorio de git")
+	case o.staged:
+		found, n, err := source.ScanStaged(gitTop(root), det, exclude)
+		return found, n, false, err
+	}
+	found, n, err := source.ScanFiles(root, det, source.Options{Exclude: exclude, Workers: o.workers})
+	if err != nil || !o.history {
+		return found, n, false, err
+	}
+	if !isGitRepo(root) {
+		fmt.Fprintln(stderr, "aviso: no es un repositorio de git; se escanean solo los archivos actuales")
+		return found, n, false, nil
+	}
+	gitRoot := root
+	if fi, statErr := os.Stat(root); statErr == nil && !fi.IsDir() {
+		gitRoot = filepath.Dir(root)
+	}
+	hist, err := source.ScanHistory(gitRoot, det, exclude)
+	return source.MergeHistory(found, hist), n, true, err
+}
+
 func isGitRepo(root string) bool {
 	_, err := os.Stat(filepath.Join(gitTop(root), ".git"))
 	return err == nil
+}
+
+func stripFlag(args []string, flag string) []string {
+	var out []string
+	for _, a := range args {
+		if a != flag {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 func splitList(s string) []string {

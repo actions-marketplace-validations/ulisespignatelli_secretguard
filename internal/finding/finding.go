@@ -46,6 +46,8 @@ func ParseSeverity(v string) (Severity, bool) {
 
 // Finding es un posible secreto encontrado.
 type Finding struct {
+	Repo        string   `json:"repo,omitempty"` // duenio/repo cuando se escanea GitHub
+	URL         string   `json:"url,omitempty"`  // enlace a la linea en GitHub
 	RuleID      string   `json:"rule_id"`
 	RuleName    string   `json:"rule_name"`
 	Severity    Severity `json:"-"`

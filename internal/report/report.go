@@ -18,6 +18,7 @@ type Summary struct {
 	History   bool   `json:"history"`
 	Staged    bool   `json:"staged"`
 	Baselined int    `json:"baselined"`
+	Repos     int    `json:"repos,omitempty"`
 	Version   string `json:"version"`
 }
 
@@ -35,6 +36,9 @@ func Text(w io.Writer, fs []finding.Finding, s Summary, color bool) {
 		what = "cambios preparados"
 	}
 	fmt.Fprintf(w, "%s %s · %d %s revisados", c("1", "secretguard"), s.Version, s.Files, what)
+	if s.Repos > 0 {
+		fmt.Fprintf(w, " · %d repo(s) de GitHub (%s)", s.Repos, s.Target)
+	}
 	if s.History {
 		fmt.Fprint(w, " · con historial de git")
 	}
@@ -50,7 +54,13 @@ func Text(w io.Writer, fs []finding.Finding, s Summary, color bool) {
 		loc := fmt.Sprintf("%s:%d:%d", f.File, f.Line, f.Column)
 		label := map[finding.Severity]string{finding.Critical: "CRÍTICA", finding.High: "ALTA   ", finding.Medium: "MEDIA  ", finding.Low: "BAJA   "}[f.Severity]
 		fmt.Fprintf(w, "\n%s %s  %s\n", c(sevColor[f.Severity], fmt.Sprintf("[%3d] %s", f.Score, label)), f.RuleName, c("2", fmt.Sprintf("#%d", i+1)))
+		if f.Repo != "" {
+			loc = f.Repo + " · " + loc
+		}
 		fmt.Fprintf(w, "      lugar:   %s\n", loc)
+		if f.URL != "" {
+			fmt.Fprintf(w, "      ver:     %s\n", f.URL)
+		}
 		fmt.Fprintf(w, "      secreto: %s\n", f.Redacted)
 		if f.Commit != "" {
 			state := "introducido en el commit"
@@ -102,7 +112,7 @@ func SARIF(w io.Writer, fs []finding.Finding, s Summary) error {
 		results = append(results, map[string]any{
 			"ruleId": f.RuleID, "level": level[f.Severity], "message": map[string]string{"text": msg},
 			"locations": []any{map[string]any{"physicalLocation": map[string]any{
-				"artifactLocation": map[string]string{"uri": f.File},
+				"artifactLocation": map[string]string{"uri": sarifURI(f)},
 				"region":           map[string]int{"startLine": max(1, f.Line), "startColumn": max(1, f.Column)},
 			}}},
 			"partialFingerprints": map[string]string{"secretguard/v1": f.Fingerprint},
@@ -120,4 +130,11 @@ func SARIF(w io.Writer, fs []finding.Finding, s Summary) error {
 	e := json.NewEncoder(w)
 	e.SetIndent("", "  ")
 	return e.Encode(doc)
+}
+
+func sarifURI(f finding.Finding) string {
+	if f.Repo != "" {
+		return f.Repo + "/" + f.File
+	}
+	return f.File
 }

@@ -28,6 +28,7 @@ secretguard los encuentra antes que otros, y responde las tres preguntas que imp
 | **Riesgo, no solo coincidencias** | Ordena por puntaje: lo crítico y vigente primero, el JWT de prueba al final. |
 | **Nunca muestra el secreto** | Ni en la terminal ni en los informes: solo los primeros caracteres y una huella. |
 | **Historial completo** | Revisa todas las ramas y te dice en qué commit entró cada secreto, o si ya solo vive en el historial. |
+| **Directo desde GitHub** | Un repo, todos los de un usuario o los de una organización, con enlace a cada línea. |
 | **Proveedores de la región** | Mercado Pago, además de AWS, GitHub, GitLab, Stripe, Google, Slack, OpenAI, Anthropic y más. |
 | **Listo para CI** | SARIF para la pestaña *Security* de GitHub, GitHub Action, hook pre-commit y línea base. |
 
@@ -41,6 +42,24 @@ O descargá el ejecutable para Windows, Linux o macOS desde [Releases](https://g
 y verificalo con `checksums.txt`.
 
 ## Uso
+
+### Directo desde GitHub
+
+No hace falta clonar nada: secretguard trae el repositorio con todo su historial a una carpeta temporal,
+lo revisa y la borra.
+
+```bash
+secretguard github ulisespignatelli/argos
+secretguard github https://github.com/ulisespignatelli/argos
+secretguard github --user ulisespignatelli        # todos los repos de un usuario
+secretguard github --org mi-empresa --forks       # una organización, forks incluidos
+```
+
+Cada hallazgo trae el enlace directo a la línea en GitHub (o al commit, si ya solo vive en el historial),
+y suma riesgo si el repositorio es público. Para repos privados, definí `GITHUB_TOKEN` (o `GH_TOKEN`) con
+permiso de solo lectura: el token se lee del entorno, nunca de la línea de comandos, y no se guarda.
+
+### En tu máquina
 
 ```bash
 secretguard scan                      # la carpeta actual
@@ -150,7 +169,8 @@ secretguard se escanea a sí mismo en cada cambio.
 - `--verify`: confirmar si un secreto sigue activo, con una consulta de solo lectura al proveedor y
   solo con autorización explícita
 - Reglas propias en un archivo de configuración
-- Escaneo de imágenes de contenedores y de organizaciones completas de GitHub
+- Escaneo de imágenes de contenedores
+- Escaneo de issues, pull requests y gists de GitHub
 
 ## Uso responsable
 

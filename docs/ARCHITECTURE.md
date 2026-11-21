@@ -5,6 +5,7 @@ cmd/secretguard/       CLI: parseo de opciones, códigos de salida, hook pre-com
 internal/rules/        tipos de secreto: patrón, palabras clave, gravedad, entropía mínima, cómo revocar
 internal/detect/       motor: filtros, entropía, valores de ejemplo y puntaje de riesgo
 internal/source/       de dónde sale el texto: archivos (concurrente), git log, git diff --cached
+internal/remote/       GitHub: validar el repo, clonarlo de forma segura y listar repos (API REST)
 internal/baseline/     hallazgos aceptados, guardados como huellas
 internal/report/       salida en texto, JSON y SARIF 2.1.0
 internal/finding/      el tipo Finding, huellas y enmascarado
@@ -41,3 +42,7 @@ del archivo se completa con ese commit; si no, se marca como "solo en el histori
 | Ruta de pruebas o ejemplos | −30 |
 | Archivo de configuración o credenciales | +10 |
 | Secreto genérico con entropía ≥ 4,5 | +5 |
+
+**GitHub sin bibliotecas.** Para listar repositorios alcanza con `net/http` y la API REST (con paginación
+por cabecera `Link`). Para traer el código se usa `git clone` completo: así se reutiliza exactamente el
+mismo escaneo de archivos e historial que en local, y cada hallazgo se completa con el enlace a GitHub.
