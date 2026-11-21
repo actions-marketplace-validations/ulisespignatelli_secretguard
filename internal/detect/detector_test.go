@@ -60,6 +60,10 @@ func TestNegatives(t *testing.T) {
 		J("postgres://user:", "password", "@localhost/db"),
 		`const password = getPassword()`,
 		`password = "` + Rand(20, Alnum, 99) + `" // secretguard:allow (dato de prueba)`,
+		`    "/etc/passwd": "root:x:0:0:root:/root:/bin/bash\nuser:x:1000:1000::/home/user:/bin/bash\n",`,
+		`shadow = "root:*:19000:0:99999:7:::"`,
+		J(`const demo = "ey`, `JhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ey`, `JzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.`,
+			`SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"`),
 	} {
 		if fs := d.ScanLine(line, "app.py", 1); len(fs) != 0 {
 			t.Errorf("falso positivo en %q: %s", line, fs[0].RuleID)

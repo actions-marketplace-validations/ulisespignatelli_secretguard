@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"bytes"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/ulisespignatelli/secretguard/internal/finding"
@@ -71,6 +72,12 @@ func (d *Detector) ScanLine(line, path string, lineNo int) []finding.Finding {
 			}
 			secret := line[s:e]
 			ent := Entropy(secret)
+			if r.ID == "generic-secret" && notASecret(line, m[0], secret) {
+				continue
+			}
+			if r.ID == "jwt" && IsExampleJWT(secret) {
+				continue
+			}
 			if r.ID != "private-key" {
 				if r.MinEntropy > 0 && ent < r.MinEntropy {
 					continue
@@ -88,6 +95,35 @@ func (d *Detector) ScanLine(line, path string, lineNo int) []finding.Finding {
 		}
 	}
 	return out
+}
+
+// passwdLine reconoce el formato de /etc/passwd o /etc/shadow ("root:x:0:0:..."), que no es un secreto.
+var passwdLine = regexp.MustCompile(`^[a-z_][a-z0-9_-]*:[x*!]:\d+:\d+:`)
+
+// notASecret descarta falsos positivos tipicos de la regla generica:
+//   - la "clave" es parte de una ruta ("/etc/passwd": "...", config.password_file)
+//   - el valor es contenido de /etc/passwd en un fixture de pruebas
+func notASecret(line string, start int, value string) bool {
+	if start > 0 && strings.ContainsRune("/\\.", rune(line[start-1])) {
+		return true
+	}
+	return passwdLine.MatchString(value)
+}
+
+// exampleJWTSignatures son firmas de tokens de ejemplo muy difundidos (jwt.io, documentacion de RFC 7519).
+var exampleJWTSignatures = []string{
+	"SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c", // jwt.io, HS256 "your-256-bit-secret"
+	"dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk", // RFC 7519
+}
+
+// IsExampleJWT reconoce tokens de ejemplo publicos, que aparecen en documentacion y en herramientas de prueba.
+func IsExampleJWT(tok string) bool {
+	for _, s := range exampleJWTSignatures {
+		if strings.HasSuffix(tok, s) {
+			return true
+		}
+	}
+	return false
 }
 
 func hasKeyword(low string, kws []string) bool {
