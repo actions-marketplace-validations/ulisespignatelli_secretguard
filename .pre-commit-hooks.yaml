@@ -1,0 +1,6 @@
+- id: secretguard
+  name: secretguard
+  description: Frena el commit si los cambios preparados contienen secretos.
+  entry: secretguard scan --staged --fail-on media .
+  language: golang
+  pass_filenames: false

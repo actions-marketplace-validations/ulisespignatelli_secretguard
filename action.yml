@@ -1,0 +1,45 @@
+name: "secretguard"
+description: "Encuentra secretos (claves de API, tokens, claves privadas) en el código y el historial de git, ordenados por riesgo."
+author: "Ulises Pignatelli"
+branding:
+  icon: "shield"
+  color: "green"
+inputs:
+  path:
+    description: "Carpeta a escanear"
+    default: "."
+  history:
+    description: "Revisar también el historial de git (requiere actions/checkout con fetch-depth: 0)"
+    default: "true"
+  fail-on:
+    description: "Gravedad desde la que falla el job: baja, media, alta o critica"
+    default: "media"
+  sarif:
+    description: "Ruta del informe SARIF para subir a GitHub code scanning (vacío = no generar)"
+    default: "secretguard.sarif"
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-go@v5
+      with:
+        go-version: "1.24"
+        cache: false
+    - name: Compilar secretguard
+      shell: bash
+      run: cd "$GITHUB_ACTION_PATH" && go build -trimpath -o "$RUNNER_TEMP/secretguard" ./cmd/secretguard
+    - name: Escanear
+      shell: bash
+      env:
+        SG_PATH: ${{ inputs.path }}
+        SG_HISTORY: ${{ inputs.history }}
+        SG_FAIL: ${{ inputs.fail-on }}
+        SG_SARIF: ${{ inputs.sarif }}
+      run: |
+        args=(scan "$SG_PATH" --fail-on "$SG_FAIL")
+        [ "$SG_HISTORY" = "true" ] && args+=(--history)
+        status=0
+        if [ -n "$SG_SARIF" ]; then
+          "$RUNNER_TEMP/secretguard" "${args[@]}" --format sarif --output "$SG_SARIF" || status=$?
+        fi
+        "$RUNNER_TEMP/secretguard" "${args[@]}" || status=$?
+        exit $status

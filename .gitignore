@@ -1,0 +1,5 @@
+/secretguard
+/secretguard.exe
+/dist/
+*.sarif
+.secretguard-report.*
