@@ -1,4 +1,4 @@
-name: "secretguard"
+name: "secretguard secret scanner"
 description: "Encuentra secretos (claves de API, tokens, claves privadas) en el código y el historial de git, ordenados por riesgo."
 author: "Ulises Pignatelli"
 branding:
